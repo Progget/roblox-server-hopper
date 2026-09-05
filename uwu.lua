@@ -3,25 +3,9 @@ local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ======================== LOAD WINDUI ========================
-local WindUI
-do
-    local ok, result = pcall(function()
-        return require("./src/Init")
-    end)
-
-    if ok then
-        WindUI = result
-    else
-        if game:GetService("RunService"):IsStudio() then
-            WindUI = require(game:GetService("ReplicatedStorage"):WaitForChild("WindUI"):WaitForChild("Init"))
-        else
-            WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-        end
-    end
-end
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- ======================== CONFIG SYSTEM ========================
 local ConfigManager = {}
@@ -80,7 +64,7 @@ function DiscordNotifier:Send(title, description, color)
         }
     }
     
-    local success, response = pcall(function()
+    local success = pcall(function()
         return game:HttpGet(getgenv().Config.webhookUrl, true, HttpService:JSONEncode(payload))
     end)
     
@@ -111,7 +95,6 @@ function ServerHopper:GetServersInGame()
                     id = server.id,
                     players = server.playing,
                     maxPlayers = server.maxPlayers,
-                    fps = server.fps
                 })
             end
         end
@@ -150,7 +133,7 @@ function ServerHopper:HopToServer(serverId)
         if getgenv().Config.notifyOnHop then
             DiscordNotifier:Send(
                 "🔄 Server Hopped",
-                "Moved to new server with fewer players\nServer ID: `" .. serverId .. "`\nTotal Hops: " .. self.hopCount,
+                "Moved to new server with " .. tostring(bestServer.players) .. " players\nTotal Hops: " .. self.hopCount,
                 65280
             )
         end
@@ -172,7 +155,7 @@ function ServerHopper:StartAutoHopping()
         self.connection:Disconnect()
     end
     
-    self.connection = game:GetService("RunService").Heartbeat:Connect(function()
+    self.connection = RunService.Heartbeat:Connect(function()
         if not getgenv().Config.autoHopEnabled then
             return
         end
@@ -192,7 +175,7 @@ function ServerHopper:StartAutoHopping()
                 if getgenv().Config.notifyOnServerFound then
                     DiscordNotifier:Send(
                         "✅ Server Found",
-                        "Found server with **" .. bestServer.players .. "** players\n(Threshold: " .. getgenv().Config.maxPlayersThreshold .. ")",
+                        "Found server with **" .. bestServer.players .. "** players",
                         3447003
                     )
                 end
@@ -212,45 +195,55 @@ function ServerHopper:StopAutoHopping()
     end
 end
 
--- ======================== CREATE WINDUI WINDOW ========================
+-- ======================== COLORS ========================
+local Blue = Color3.fromHex("#257AF7")
+local Green = Color3.fromHex("#10C550")
+local Red = Color3.fromHex("#EF4F1D")
+local Yellow = Color3.fromHex("#ECA201")
+local Purple = Color3.fromHex("#7775F2")
+local Grey = Color3.fromHex("#83889E")
+
+-- ======================== CREATE WINDOW ========================
 local Window = WindUI:CreateWindow({
-    Title = "🚀 Server Hopper | WindUI",
+    Title = "Server Hopper | WindUI",
     Folder = "ServerHopper",
     Icon = "solar:rocket-bold",
     HideSearchBar = false,
     OpenButton = {
         Title = "Server Hopper",
         CornerRadius = UDim.new(1, 0),
-        StrokeThickness = 2,
         Enabled = true,
         Draggable = true,
         Scale = 1,
-        Color = ColorSequence.new(
-            Color3.fromHex("#30FF6A"),
-            Color3.fromHex("#00D4FF")
-        ),
     },
 })
 
--- Colors
-local Green = Color3.fromHex("#10C550")
-local Red = Color3.fromHex("#EF4F1D")
-local Blue = Color3.fromHex("#257AF7")
-local Yellow = Color3.fromHex("#ECA201")
-local Purple = Color3.fromHex("#7775F2")
+-- ======================== CREAR SECTIONS CON TABS ========================
+local HopperSection = Window:Section({
+    Title = "Hopper",
+})
+
+local DiscordSection = Window:Section({
+    Title = "Discord",
+})
+
+local StatsSection = Window:Section({
+    Title = "Statistics",
+})
+
+local SettingsSection = Window:Section({
+    Title = "Settings",
+})
 
 -- ======================== HOPPER TAB ========================
-local HopperTab = Window:Tab({
-    Title = "Hopper",
+local HopperTab = HopperSection:Tab({
+    Title = "Auto Hopping",
     Icon = "solar:rocket-bold",
     IconColor = Blue,
+    Border = true,
 })
 
-local HopperSection = HopperTab:Section({
-    Title = "Auto Hopping Settings",
-})
-
-local autoHopToggle = HopperSection:Toggle({
+HopperTab:Toggle({
     Title = "Enable Auto Hop",
     Icon = "solar:toggle-on-bold",
     Value = getgenv().Config.autoHopEnabled,
@@ -261,26 +254,23 @@ local autoHopToggle = HopperSection:Toggle({
         if value then
             ServerHopper:StartAutoHopping()
             WindUI:Notify({
-                Title = "Auto Hop Started",
-                Content = "Searching for empty servers...",
-                Icon = "rocket",
+                Title = "✓ Auto Hop Started",
+                Content = "Searching for empty servers",
             })
         else
             ServerHopper:StopAutoHopping()
             WindUI:Notify({
-                Title = "Auto Hop Stopped",
-                Content = "Stopped searching for servers",
-                Icon = "stop-circle",
+                Title = "✗ Auto Hop Stopped",
+                Content = "Stopped searching",
             })
         end
     end,
 })
 
-HopperSection:Space()
+HopperTab:Space()
 
-HopperSection:Slider({
+HopperTab:Slider({
     Title = "Max Players Threshold",
-    Icon = "users",
     Step = 1,
     IsTooltip = true,
     Value = {
@@ -294,11 +284,10 @@ HopperSection:Slider({
     end,
 })
 
-HopperSection:Space()
+HopperTab:Space()
 
-HopperSection:Slider({
+HopperTab:Slider({
     Title = "Search Interval (Seconds)",
-    Icon = "clock",
     Step = 1,
     IsTooltip = true,
     Value = {
@@ -314,36 +303,24 @@ HopperSection:Slider({
 
 HopperTab:Space()
 
-local ActionSection = HopperTab:Section({
-    Title = "Quick Actions",
-})
-
-ActionSection:Button({
+HopperTab:Button({
     Title = "Hop Now",
     Icon = "rocket",
     Color = Blue,
     Justify = "Center",
     Callback = function()
-        WindUI:Notify({
-            Title = "Searching...",
-            Content = "Looking for empty servers",
-            Icon = "loader",
-        })
-        
         task.spawn(function()
             local bestServer = ServerHopper:FindBestServer()
             if bestServer then
                 WindUI:Notify({
-                    Title = "Server Found!",
-                    Content = "Players: " .. bestServer.players .. "/" .. bestServer.maxPlayers,
-                    Icon = "check",
+                    Title = "✓ Server Found",
+                    Content = "Players: " .. bestServer.players,
                 })
                 ServerHopper:HopToServer(bestServer.id)
             else
                 WindUI:Notify({
-                    Title = "No Servers Found",
-                    Content = "No suitable servers available",
-                    Icon = "x",
+                    Title = "✗ No Servers",
+                    Content = "No suitable servers found",
                     Color = "Red",
                 })
             end
@@ -351,49 +328,44 @@ ActionSection:Button({
     end,
 })
 
-ActionSection:Space()
+HopperTab:Space()
 
-ActionSection:Button({
+HopperTab:Button({
     Title = "Reset Statistics",
     Icon = "refresh-cw",
     Color = Yellow,
     Justify = "Center",
     Callback = function()
         ServerHopper.hopCount = 0
-        ServerHopper.lastHopTime = 0
-        WindUI:Notify({
-            Title = "Statistics Reset",
-            Content = "All counters have been reset",
-            Icon = "check",
+        WindowUI:Notify({
+            Title = "✓ Reset",
+            Content = "Statistics cleared",
         })
     end,
 })
 
 -- ======================== DISCORD TAB ========================
-local DiscordTab = Window:Tab({
-    Title = "Discord",
+local DiscordTab = DiscordSection:Tab({
+    Title = "Discord Webhook",
     Icon = "solar:chat-bold",
     IconColor = Purple,
+    Border = true,
 })
 
-local WebhookSection = DiscordTab:Section({
-    Title = "Discord Webhook",
-})
-
-local webhookInput = WebhookSection:Input({
+DiscordTab:Input({
     Title = "Webhook URL",
     Icon = "link",
     Placeholder = "https://discord.com/api/webhooks/...",
-    Default = getgenv().Config.webhookUrl,
+    Value = getgenv().Config.webhookUrl,
     Callback = function(value)
         getgenv().Config.webhookUrl = value
         ConfigManager:Save(getgenv().Config)
     end,
 })
 
-WebhookSection:Space()
+DiscordTab:Space()
 
-WebhookSection:Button({
+DiscordTab:Button({
     Title = "Test Webhook",
     Icon = "send",
     Color = Blue,
@@ -401,54 +373,38 @@ WebhookSection:Button({
     Callback = function()
         if getgenv().Config.webhookUrl == "" then
             WindUI:Notify({
-                Title = "Error",
-                Content = "Please enter a webhook URL first",
-                Icon = "x",
+                Title = "✗ Error",
+                Content = "Enter webhook URL first",
                 Color = "Red",
             })
             return
         end
         
-        WindUI:Notify({
-            Title = "Testing...",
-            Content = "Sending test notification",
-            Icon = "loader",
-        })
+        local success = DiscordNotifier:Send(
+            "✅ Test Notification",
+            "Your webhook is working!",
+            3447003
+        )
         
-        task.spawn(function()
-            local success = DiscordNotifier:Send(
-                "✅ Test Notification",
-                "Your webhook is configured correctly!",
-                3447003
-            )
-            
-            if success then
-                WindUI:Notify({
-                    Title = "Success!",
-                    Content = "Webhook is working properly",
-                    Icon = "check",
-                })
-            else
-                WindUI:Notify({
-                    Title = "Failed",
-                    Content = "Webhook URL is invalid",
-                    Icon = "x",
-                    Color = "Red",
-                })
-            end
-        end)
+        if success then
+            WindUI:Notify({
+                Title = "✓ Success",
+                Content = "Webhook is working",
+            })
+        else
+            WindUI:Notify({
+                Title = "✗ Failed",
+                Content = "Webhook URL invalid",
+                Color = "Red",
+            })
+        end
     end,
 })
 
 DiscordTab:Space()
 
-local NotifySection = DiscordTab:Section({
-    Title = "Notification Settings",
-})
-
-NotifySection:Toggle({
+DiscordTab:Toggle({
     Title = "Notify on Hop",
-    Icon = "bell",
     Value = getgenv().Config.notifyOnHop,
     Callback = function(value)
         getgenv().Config.notifyOnHop = value
@@ -456,11 +412,10 @@ NotifySection:Toggle({
     end,
 })
 
-NotifySection:Space()
+DiscordTab:Space()
 
-NotifySection:Toggle({
+DiscordTab:Toggle({
     Title = "Notify on Server Found",
-    Icon = "target",
     Value = getgenv().Config.notifyOnServerFound,
     Callback = function(value)
         getgenv().Config.notifyOnServerFound = value
@@ -468,11 +423,10 @@ NotifySection:Toggle({
     end,
 })
 
-NotifySection:Space()
+DiscordTab:Space()
 
-NotifySection:Toggle({
+DiscordTab:Toggle({
     Title = "Notify on Errors",
-    Icon = "alert-circle",
     Value = getgenv().Config.notifyErrors,
     Callback = function(value)
         getgenv().Config.notifyErrors = value
@@ -480,54 +434,39 @@ NotifySection:Toggle({
     end,
 })
 
--- ======================== STATISTICS TAB ========================
-local StatsTab = Window:Tab({
-    Title = "Statistics",
+-- ======================== STATS TAB ========================
+local StatsTab = StatsSection:Tab({
+    Title = "Server Stats",
     Icon = "solar:chart-bold",
     IconColor = Green,
+    Border = true,
 })
 
-local StatsSection = StatsTab:Section({
-    Title = "Server Information",
-})
-
-local playerCountLabel = StatsTab:Paragraph({
-    Title = "Players In Server",
-    Desc = "Loading...",
+local playerLabel = StatsTab:Paragraph({
+    Title = "Players in Server",
+    Desc = tostring(#Players:GetPlayers()),
     TextSize = 16,
 })
 
 local pingLabel = StatsTab:Paragraph({
     Title = "Ping",
-    Desc = "Loading...",
+    Desc = "0ms",
     TextSize = 16,
 })
 
-local serversCheckedLabel = StatsTab:Paragraph({
-    Title = "Servers Checked",
-    Desc = "0",
-    TextSize = 16,
-})
-
-StatsTab:Space()
-
-local HopsSection = StatsTab:Section({
-    Title = "Hopping Statistics",
-})
-
-local hopCountLabel = HopsSection:Paragraph({
+local hopsLabel = StatsTab:Paragraph({
     Title = "Total Hops",
     Desc = tostring(ServerHopper.hopCount),
     TextSize = 16,
 })
 
-local jobIdLabel = HopsSection:Paragraph({
+local jobIdLabel = StatsTab:Paragraph({
     Title = "Current Job ID",
     Desc = game.JobId,
     TextSize = 14,
 })
 
--- Update stats in real-time
+-- Update stats
 RunService.Heartbeat:Connect(function()
     local playerCount = #Players:GetPlayers()
     local ping = 0
@@ -536,43 +475,31 @@ RunService.Heartbeat:Connect(function()
         ping = math.floor(game:GetService("Stats").Network:FindFirstChild("ClientReplicator"):GetNetworkReceiveData()[3])
     end)
     
-    playerCountLabel:Set({
-        Title = "Players In Server",
-        Desc = tostring(playerCount) .. " / 50",
-        TextSize = 16,
+    playerLabel:Set({
+        Title = "Players in Server",
+        Desc = tostring(playerCount),
     })
     
     pingLabel:Set({
         Title = "Ping",
         Desc = ping .. "ms",
-        TextSize = 16,
     })
     
-    serversCheckedLabel:Set({
-        Title = "Servers Checked",
-        Desc = tostring(ServerHopper.totalServersChecked),
-        TextSize = 16,
-    })
-    
-    hopCountLabel:Set({
+    hopsLabel:Set({
         Title = "Total Hops",
         Desc = tostring(ServerHopper.hopCount),
-        TextSize = 16,
     })
 end)
 
 -- ======================== SETTINGS TAB ========================
-local SettingsTab = Window:Tab({
-    Title = "Settings",
+local SettingsTab = SettingsSection:Tab({
+    Title = "Configuration",
     Icon = "solar:settings-bold",
     IconColor = Yellow,
+    Border = true,
 })
 
-local ConfigSection = SettingsTab:Section({
-    Title = "Configuration",
-})
-
-ConfigSection:Button({
+SettingsTab:Button({
     Title = "Save Config",
     Icon = "save",
     Color = Green,
@@ -580,16 +507,15 @@ ConfigSection:Button({
     Callback = function()
         ConfigManager:Save(getgenv().Config)
         WindUI:Notify({
-            Title = "Saved",
-            Content = "Configuration saved successfully",
-            Icon = "check",
+            Title = "✓ Saved",
+            Content = "Configuration saved",
         })
     end,
 })
 
-ConfigSection:Space()
+SettingsTab:Space()
 
-ConfigSection:Button({
+SettingsTab:Button({
     Title = "Load Config",
     Icon = "download",
     Color = Blue,
@@ -597,16 +523,15 @@ ConfigSection:Button({
     Callback = function()
         getgenv().Config = ConfigManager:Load()
         WindUI:Notify({
-            Title = "Loaded",
-            Content = "Configuration loaded successfully",
-            Icon = "check",
+            Title = "✓ Loaded",
+            Content = "Configuration loaded",
         })
     end,
 })
 
-ConfigSection:Space()
+SettingsTab:Space()
 
-ConfigSection:Button({
+SettingsTab:Button({
     Title = "Reset Config",
     Icon = "refresh-cw",
     Color = Red,
@@ -615,33 +540,14 @@ ConfigSection:Button({
         getgenv().Config = ConfigManager.DefaultConfig
         ConfigManager:Save(getgenv().Config)
         WindUI:Notify({
-            Title = "Reset",
-            Content = "Configuration reset to defaults",
-            Icon = "check",
+            Title = "✓ Reset",
+            Content = "Configuration reset",
         })
     end,
 })
 
-SettingsTab:Space()
-
-local InfoSection = SettingsTab:Section({
-    Title = "About",
-})
-
-InfoSection:Paragraph({
-    Title = "Server Hopper v1.0",
-    Desc = "Advanced server hopping with Discord notifications\n\nFeatures:\n• Auto hop to empty servers\n• Discord webhook integration\n• Real-time statistics\n• Configuration saving",
-    TextSize = 14,
-    Image = "solar:rocket-bold",
-})
-
--- ======================== FINAL ========================
-print("[✓] Server Hopper with WindUI loaded successfully!")
-print("[ℹ] Configuration auto-saves")
-print("[ℹ] Use the UI to configure hopping and Discord webhooks")
-
+print("[✓] Server Hopper loaded!")
 WindUI:Notify({
-    Title = "Server Hopper Loaded",
-    Content = "Ready to hop servers!",
-    Icon = "rocket",
+    Title = "Server Hopper v1.0",
+    Content = "Ready to hop!",
 })
