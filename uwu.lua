@@ -76,8 +76,6 @@ local ServerHopper = {}
 ServerHopper.searching = false
 ServerHopper.connection = nil
 ServerHopper.hopCount = 0
-ServerHopper.lastHopTime = 0
-ServerHopper.totalServersChecked = 0
 
 function ServerHopper:GetServersInGame()
     local PlaceId = game.PlaceId
@@ -100,7 +98,6 @@ function ServerHopper:GetServersInGame()
         end
     end
     
-    self.totalServersChecked = #servers
     return servers
 end
 
@@ -122,27 +119,18 @@ function ServerHopper:FindBestServer()
 end
 
 function ServerHopper:HopToServer(serverId)
-    local success, err = pcall(function()
+    local success = pcall(function()
         TeleportService:TeleportToPlaceInstance(game.PlaceId, serverId, LocalPlayer)
     end)
     
     if success then
         self.hopCount = self.hopCount + 1
-        self.lastHopTime = os.time()
         
         if getgenv().Config.notifyOnHop then
             DiscordNotifier:Send(
                 "🔄 Server Hopped",
-                "Moved to new server with " .. tostring(bestServer.players) .. " players\nTotal Hops: " .. self.hopCount,
+                "Moved to new server\nTotal Hops: " .. self.hopCount,
                 65280
-            )
-        end
-    else
-        if getgenv().Config.notifyErrors then
-            DiscordNotifier:Send(
-                "❌ Hop Failed",
-                "Error: " .. tostring(err),
-                16711680
             )
         end
     end
@@ -170,12 +158,10 @@ function ServerHopper:StartAutoHopping()
             local bestServer = ServerHopper:FindBestServer()
             
             if bestServer then
-                print("[ServerHopper] Found server with " .. bestServer.players .. " players")
-                
                 if getgenv().Config.notifyOnServerFound then
                     DiscordNotifier:Send(
                         "✅ Server Found",
-                        "Found server with **" .. bestServer.players .. "** players",
+                        "Found server with " .. bestServer.players .. " players",
                         3447003
                     )
                 end
@@ -195,81 +181,56 @@ function ServerHopper:StopAutoHopping()
     end
 end
 
--- ======================== COLORS ========================
+-- ======================== COLORES ========================
 local Blue = Color3.fromHex("#257AF7")
 local Green = Color3.fromHex("#10C550")
 local Red = Color3.fromHex("#EF4F1D")
 local Yellow = Color3.fromHex("#ECA201")
 local Purple = Color3.fromHex("#7775F2")
-local Grey = Color3.fromHex("#83889E")
 
--- ======================== CREATE WINDOW ========================
+-- ======================== CREAR WINDOW ========================
 local Window = WindUI:CreateWindow({
     Title = "Server Hopper | WindUI",
     Folder = "ServerHopper",
     Icon = "solar:rocket-bold",
     HideSearchBar = false,
-    OpenButton = {
-        Title = "Server Hopper",
-        CornerRadius = UDim.new(1, 0),
-        Enabled = true,
-        Draggable = true,
-        Scale = 1,
-    },
 })
 
--- ======================== CREAR SECTIONS CON TABS ========================
-local HopperSection = Window:Section({
+-- ======================== TAB 1: HOPPER ========================
+local HopperTab = Window:Tab({
     Title = "Hopper",
-})
-
-local DiscordSection = Window:Section({
-    Title = "Discord",
-})
-
-local StatsSection = Window:Section({
-    Title = "Statistics",
-})
-
-local SettingsSection = Window:Section({
-    Title = "Settings",
-})
-
--- ======================== HOPPER TAB ========================
-local HopperTab = HopperSection:Tab({
-    Title = "Auto Hopping",
     Icon = "solar:rocket-bold",
     IconColor = Blue,
     Border = true,
 })
 
-HopperTab:Toggle({
+local HopperSection = HopperTab:Section({
+    Title = "Auto Hopping",
+})
+
+HopperSection:Toggle({
+    Flag = "AutoHopToggle",
     Title = "Enable Auto Hop",
-    Icon = "solar:toggle-on-bold",
+    Desc = "Automatically hop to servers with fewer players",
     Value = getgenv().Config.autoHopEnabled,
-    Callback = function(value)
-        getgenv().Config.autoHopEnabled = value
+    Callback = function(state)
+        getgenv().Config.autoHopEnabled = state
         ConfigManager:Save(getgenv().Config)
         
-        if value then
+        if state then
             ServerHopper:StartAutoHopping()
-            WindUI:Notify({
-                Title = "✓ Auto Hop Started",
-                Content = "Searching for empty servers",
-            })
+            print("[✓] Auto hopping started")
         else
             ServerHopper:StopAutoHopping()
-            WindUI:Notify({
-                Title = "✗ Auto Hop Stopped",
-                Content = "Stopped searching",
-            })
+            print("[✗] Auto hopping stopped")
         end
     end,
 })
 
-HopperTab:Space()
+HopperSection:Space()
 
-HopperTab:Slider({
+HopperSection:Slider({
+    Flag = "MaxPlayersSlider",
     Title = "Max Players Threshold",
     Step = 1,
     IsTooltip = true,
@@ -281,12 +242,14 @@ HopperTab:Slider({
     Callback = function(value)
         getgenv().Config.maxPlayersThreshold = value
         ConfigManager:Save(getgenv().Config)
+        print("[Config] Max players set to: " .. value)
     end,
 })
 
-HopperTab:Space()
+HopperSection:Space()
 
-HopperTab:Slider({
+HopperSection:Slider({
+    Flag = "IntervalSlider",
     Title = "Search Interval (Seconds)",
     Step = 1,
     IsTooltip = true,
@@ -298,240 +261,229 @@ HopperTab:Slider({
     Callback = function(value)
         getgenv().Config.searchInterval = value
         ConfigManager:Save(getgenv().Config)
+        print("[Config] Search interval set to: " .. value)
     end,
 })
 
-HopperTab:Space()
+HopperSection:Space()
 
-HopperTab:Button({
+HopperSection:Button({
     Title = "Hop Now",
     Icon = "rocket",
     Color = Blue,
     Justify = "Center",
     Callback = function()
+        print("[Manual] Starting manual hop search...")
         task.spawn(function()
             local bestServer = ServerHopper:FindBestServer()
             if bestServer then
-                WindUI:Notify({
-                    Title = "✓ Server Found",
-                    Content = "Players: " .. bestServer.players,
-                })
+                print("[✓] Found server with " .. bestServer.players .. " players")
                 ServerHopper:HopToServer(bestServer.id)
             else
-                WindUI:Notify({
-                    Title = "✗ No Servers",
-                    Content = "No suitable servers found",
-                    Color = "Red",
-                })
+                print("[✗] No suitable servers found")
             end
         end)
     end,
 })
 
-HopperTab:Space()
-
-HopperTab:Button({
-    Title = "Reset Statistics",
-    Icon = "refresh-cw",
-    Color = Yellow,
-    Justify = "Center",
-    Callback = function()
-        ServerHopper.hopCount = 0
-        WindowUI:Notify({
-            Title = "✓ Reset",
-            Content = "Statistics cleared",
-        })
-    end,
-})
-
--- ======================== DISCORD TAB ========================
-local DiscordTab = DiscordSection:Tab({
-    Title = "Discord Webhook",
+-- ======================== TAB 2: DISCORD ========================
+local DiscordTab = Window:Tab({
+    Title = "Discord",
     Icon = "solar:chat-bold",
     IconColor = Purple,
     Border = true,
 })
 
-DiscordTab:Input({
+local DiscordSection = DiscordTab:Section({
+    Title = "Webhook Configuration",
+})
+
+DiscordSection:Input({
+    Flag = "WebhookInput",
     Title = "Webhook URL",
-    Icon = "link",
     Placeholder = "https://discord.com/api/webhooks/...",
     Value = getgenv().Config.webhookUrl,
     Callback = function(value)
         getgenv().Config.webhookUrl = value
         ConfigManager:Save(getgenv().Config)
+        print("[Config] Webhook URL updated")
     end,
 })
 
-DiscordTab:Space()
+DiscordSection:Space()
 
-DiscordTab:Button({
+DiscordSection:Button({
     Title = "Test Webhook",
     Icon = "send",
     Color = Blue,
     Justify = "Center",
     Callback = function()
         if getgenv().Config.webhookUrl == "" then
-            WindUI:Notify({
-                Title = "✗ Error",
-                Content = "Enter webhook URL first",
-                Color = "Red",
-            })
+            print("[✗] Please enter webhook URL first")
             return
         end
         
+        print("[Testing] Sending test notification...")
         local success = DiscordNotifier:Send(
             "✅ Test Notification",
-            "Your webhook is working!",
+            "Your webhook is working correctly!",
             3447003
         )
         
         if success then
-            WindUI:Notify({
-                Title = "✓ Success",
-                Content = "Webhook is working",
-            })
+            print("[✓] Webhook test successful!")
         else
-            WindUI:Notify({
-                Title = "✗ Failed",
-                Content = "Webhook URL invalid",
-                Color = "Red",
-            })
+            print("[✗] Webhook test failed - check URL")
         end
     end,
 })
 
-DiscordTab:Space()
+DiscordSection:Space()
 
-DiscordTab:Toggle({
+local NotifySection = DiscordTab:Section({
+    Title = "Notifications",
+})
+
+NotifySection:Toggle({
+    Flag = "NotifyHop",
     Title = "Notify on Hop",
     Value = getgenv().Config.notifyOnHop,
-    Callback = function(value)
-        getgenv().Config.notifyOnHop = value
+    Callback = function(state)
+        getgenv().Config.notifyOnHop = state
         ConfigManager:Save(getgenv().Config)
     end,
 })
 
-DiscordTab:Space()
+NotifySection:Space()
 
-DiscordTab:Toggle({
+NotifySection:Toggle({
+    Flag = "NotifyFound",
     Title = "Notify on Server Found",
     Value = getgenv().Config.notifyOnServerFound,
-    Callback = function(value)
-        getgenv().Config.notifyOnServerFound = value
+    Callback = function(state)
+        getgenv().Config.notifyOnServerFound = state
         ConfigManager:Save(getgenv().Config)
     end,
 })
 
-DiscordTab:Space()
+NotifySection:Space()
 
-DiscordTab:Toggle({
+NotifySection:Toggle({
+    Flag = "NotifyErrors",
     Title = "Notify on Errors",
     Value = getgenv().Config.notifyErrors,
-    Callback = function(value)
-        getgenv().Config.notifyErrors = value
+    Callback = function(state)
+        getgenv().Config.notifyErrors = state
         ConfigManager:Save(getgenv().Config)
     end,
 })
 
--- ======================== STATS TAB ========================
-local StatsTab = StatsSection:Tab({
-    Title = "Server Stats",
+-- ======================== TAB 3: STATISTICS ========================
+local StatsTab = Window:Tab({
+    Title = "Statistics",
     Icon = "solar:chart-bold",
     IconColor = Green,
     Border = true,
 })
 
-local playerLabel = StatsTab:Paragraph({
-    Title = "Players in Server",
+local ServerSection = StatsTab:Section({
+    Title = "Server Info",
+})
+
+local playerParagraph = ServerSection:Paragraph({
+    Title = "Players",
     Desc = tostring(#Players:GetPlayers()),
-    TextSize = 16,
-})
-
-local pingLabel = StatsTab:Paragraph({
-    Title = "Ping",
-    Desc = "0ms",
-    TextSize = 16,
-})
-
-local hopsLabel = StatsTab:Paragraph({
-    Title = "Total Hops",
-    Desc = tostring(ServerHopper.hopCount),
-    TextSize = 16,
-})
-
-local jobIdLabel = StatsTab:Paragraph({
-    Title = "Current Job ID",
-    Desc = game.JobId,
     TextSize = 14,
 })
 
--- Update stats
+local pingParagraph = ServerSection:Paragraph({
+    Title = "Ping",
+    Desc = "0ms",
+    TextSize = 14,
+})
+
+ServerSection:Space()
+
+local HopSection = StatsTab:Section({
+    Title = "Hopping Stats",
+})
+
+local hopsParagraph = HopSection:Paragraph({
+    Title = "Total Hops",
+    Desc = tostring(ServerHopper.hopCount),
+    TextSize = 14,
+})
+
+local jobIdParagraph = HopSection:Paragraph({
+    Title = "Current Job ID",
+    Desc = game.JobId,
+    TextSize = 12,
+})
+
+-- Actualizar stats
 RunService.Heartbeat:Connect(function()
-    local playerCount = #Players:GetPlayers()
+    local players = #Players:GetPlayers()
     local ping = 0
     
     pcall(function()
         ping = math.floor(game:GetService("Stats").Network:FindFirstChild("ClientReplicator"):GetNetworkReceiveData()[3])
     end)
     
-    playerLabel:Set({
-        Title = "Players in Server",
-        Desc = tostring(playerCount),
+    playerParagraph:Set({
+        Title = "Players",
+        Desc = tostring(players),
     })
     
-    pingLabel:Set({
+    pingParagraph:Set({
         Title = "Ping",
         Desc = ping .. "ms",
     })
     
-    hopsLabel:Set({
+    hopsParagraph:Set({
         Title = "Total Hops",
         Desc = tostring(ServerHopper.hopCount),
     })
 end)
 
--- ======================== SETTINGS TAB ========================
-local SettingsTab = SettingsSection:Tab({
-    Title = "Configuration",
+-- ======================== TAB 4: SETTINGS ========================
+local SettingsTab = Window:Tab({
+    Title = "Settings",
     Icon = "solar:settings-bold",
     IconColor = Yellow,
     Border = true,
 })
 
-SettingsTab:Button({
+local ConfigSection = SettingsTab:Section({
+    Title = "Configuration",
+})
+
+ConfigSection:Button({
     Title = "Save Config",
     Icon = "save",
     Color = Green,
     Justify = "Center",
     Callback = function()
         ConfigManager:Save(getgenv().Config)
-        WindUI:Notify({
-            Title = "✓ Saved",
-            Content = "Configuration saved",
-        })
+        print("[✓] Configuration saved")
     end,
 })
 
-SettingsTab:Space()
+ConfigSection:Space()
 
-SettingsTab:Button({
+ConfigSection:Button({
     Title = "Load Config",
     Icon = "download",
     Color = Blue,
     Justify = "Center",
     Callback = function()
         getgenv().Config = ConfigManager:Load()
-        WindUI:Notify({
-            Title = "✓ Loaded",
-            Content = "Configuration loaded",
-        })
+        print("[✓] Configuration loaded")
     end,
 })
 
-SettingsTab:Space()
+ConfigSection:Space()
 
-SettingsTab:Button({
+ConfigSection:Button({
     Title = "Reset Config",
     Icon = "refresh-cw",
     Color = Red,
@@ -539,15 +491,8 @@ SettingsTab:Button({
     Callback = function()
         getgenv().Config = ConfigManager.DefaultConfig
         ConfigManager:Save(getgenv().Config)
-        WindUI:Notify({
-            Title = "✓ Reset",
-            Content = "Configuration reset",
-        })
+        print("[✓] Configuration reset")
     end,
 })
 
-print("[✓] Server Hopper loaded!")
-WindUI:Notify({
-    Title = "Server Hopper v1.0",
-    Content = "Ready to hop!",
-})
+print("[✓] Server Hopper loaded successfully!")
